@@ -1,0 +1,64 @@
+version: '3'
+
+services:
+
+  web-app:
+    container_name: django_app
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/GoogleDriveIntegrator
+      - static_volume:/GoogleDriveIntegrator/static
+    command: >
+      sh -c "python3 manage.py migrate &&
+             python3 manage.py collectstatic &&
+             gunicorn GoogleDriveIntegrator.wsgi:application --bind 0.0.0.0:8000"
+    depends_on:
+      - redis
+      - postgres
+    env_file:
+      - .env.dev
+  nginx:
+    build: ./nginx
+    ports:
+      - "8080:80"
+    volumes:
+       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+       -  static_volume:/static
+    depends_on:
+      - web-app
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_app
+    hostname: redis
+
+  postgres:
+    image: postgres:14-alpine3.17
+    container_name: postgres_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    env_file:
+      - .env.dev
+
+
+  celery:
+    build:
+      context: .
+    command: python3 -m celery -A  GoogleDriveIntegrator worker -l info
+    env_file:
+      - .env.dev
+    depends_on:
+      - postgres
+      - redis
+
+
+volumes:
+  pgdata:
+  static_volume:
+
+
